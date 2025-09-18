@@ -3,10 +3,17 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"url-shortener/internal/config"
+	loggerM "url-shortener/internal/http-server/middleware/logger"
 	"url-shortener/internal/lib/logger/sl"
 	"url-shortener/internal/storage/sqlite"
+
+	"url-shortener/internal/http-server/handlers/url/save"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 const (
@@ -23,7 +30,6 @@ func main() {
 	log := setupLogger(cfg.Env)
 
 	log.Info("starting url-shortener", slog.String("env", cfg.Env))
-	log.Debug("debug message")
 
 	storage, err := sqlite.NewStorage(cfg.StoragePath)
 
@@ -32,9 +38,31 @@ func main() {
 		os.Exit(1)
 	}
 
-	_ = storage
+	router := chi.NewRouter()
 
-	log.Info("storage created successfully")
+	router.Use(middleware.RequestID)
+	router.Use(middleware.Logger)
+	router.Use(loggerM.New(log))
+	router.Use(middleware.Recoverer)
+	router.Use(middleware.URLFormat)
+
+	router.Post("/url", save.New(log, storage))
+
+	log.Info("starting server", slog.String("address", cfg.Address))
+
+	srv := &http.Server{
+		Addr:         cfg.Address,
+		Handler:      router,
+		ReadTimeout:  cfg.HTTPServer.Timeout,
+		WriteTimeout: cfg.HTTPServer.Timeout,
+		IdleTimeout:  cfg.HTTPServer.IdleTimeout,
+	}
+
+	if err := srv.ListenAndServe(); err != nil {
+		log.Error("failed to start server", sl.Error(err))
+		os.Exit(1)
+	}
+
 }
 
 func setupLogger(env string) *slog.Logger {

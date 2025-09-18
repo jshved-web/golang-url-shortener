@@ -22,7 +22,7 @@ type HTTPServer struct {
 
 func MustLoad() *Config {
 	// Todo: Add to .env
-	configPath := "C:/Users/ilyas/OneDrive/Desktop/Go/url-shortener/config/local.yaml"
+	configPath := "config/local.yaml"
 
 	if configPath == "" {
 		log.Fatal("CONFIG_PATH is not set")
